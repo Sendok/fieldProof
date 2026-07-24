@@ -1,0 +1,2 @@
+import type { MetadataRoute } from "next";
+export default function manifest():MetadataRoute.Manifest{return{name:"FieldProof",short_name:"FieldProof",description:"Bukti kerja lapangan yang rapi dan dapat diverifikasi.",start_url:"/app/my-tasks/today",display:"standalone",background_color:"#FFF9F2",theme_color:"#E85D4A",orientation:"portrait-primary",icons:[{src:"/icon",sizes:"512x512",type:"image/png",purpose:"any"},{src:"/icon",sizes:"512x512",type:"image/png",purpose:"maskable"}]};}

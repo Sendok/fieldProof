@@ -1,0 +1,5 @@
+import { DraftConflictError, SubmissionValidationError, submitWorkOrder } from "@/modules/execution/service";
+import { assertPermission } from "@/modules/memberships/permissions";
+import { requireTenantContext } from "@/server/auth/tenant";
+import { assertSameOrigin } from "@/server/security/origin";
+export async function POST(request:Request,{params}:{params:Promise<{id:string}>}){try{assertSameOrigin(request);const[tenant,route,body]=await Promise.all([requireTenantContext(),params,request.json()]);assertPermission(tenant.role,"work_order:execute");const result=await submitWorkOrder(tenant.organizationId,tenant.membershipId,tenant.userId,route.id,body);return Response.json(result);}catch(error){if(error instanceof SubmissionValidationError)return Response.json({error:error.message,...error.details},{status:422});if(error instanceof DraftConflictError)return Response.json({error:error.message,recoverable:true,workOrderStatus:error.workOrderStatus},{status:409});return Response.json({error:error instanceof Error?error.message:"SUBMISSION_FAILED"},{status:400});}}

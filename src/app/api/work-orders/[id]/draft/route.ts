@@ -1,0 +1,5 @@
+import { DraftConflictError, syncWorkOrderDraft } from "@/modules/execution/service";
+import { assertPermission } from "@/modules/memberships/permissions";
+import { requireTenantContext } from "@/server/auth/tenant";
+import { assertSameOrigin } from "@/server/security/origin";
+export async function PUT(request:Request,{params}:{params:Promise<{id:string}>}){try{assertSameOrigin(request);const[tenant,route,body]=await Promise.all([requireTenantContext(),params,request.json()]);assertPermission(tenant.role,"work_order:execute");const row=await syncWorkOrderDraft(tenant.organizationId,tenant.membershipId,route.id,body);return Response.json({draftId:row.id,version:row.version,updatedAt:row.updatedAt});}catch(error){if(error instanceof DraftConflictError)return Response.json({error:error.message,recoverable:true,currentVersion:error.currentVersion,workOrderStatus:error.workOrderStatus},{status:409});return Response.json({error:error instanceof Error?error.message:"DRAFT_SYNC_FAILED"},{status:400});}}

@@ -1,0 +1,211 @@
+@import "tailwindcss";
+@source "../";
+
+:root {
+  --color-coral-50: #fff2ef;
+  --color-coral-100: #ffe1da;
+  --color-coral-200: #ffc4b8;
+  --color-coral-300: #f89a89;
+  --color-coral-400: #f27968;
+  --color-coral-500: #df6553;
+  --color-coral-600: #c65342;
+  --color-coral-700: #a94335;
+  --color-coral-800: #87372d;
+  --color-coral-900: #702f28;
+  --color-cream-50: #fffcf7;
+  --color-cream-100: #fff8ec;
+  --color-cream-200: #f9eedc;
+  --color-cream-300: #f0dfc6;
+  --color-ink: #2c2926;
+  --color-ink-soft: #5e5852;
+  --color-muted: #6f6760;
+  --color-border: #e5d8c8;
+  --color-surface: #ffffff;
+  --color-success: #34785a;
+  --color-warning: #a96f1f;
+  --color-danger: #b64040;
+  --color-info: #386c8e;
+}
+
+@theme inline {
+  --color-coral-50: var(--color-coral-50);
+  --color-coral-100: var(--color-coral-100);
+  --color-coral-200: var(--color-coral-200);
+  --color-coral-300: var(--color-coral-300);
+  --color-coral-400: var(--color-coral-400);
+  --color-coral-500: var(--color-coral-500);
+  --color-coral-600: var(--color-coral-600);
+  --color-coral-700: var(--color-coral-700);
+  --color-coral-800: var(--color-coral-800);
+  --color-coral-900: var(--color-coral-900);
+  --color-cream-50: var(--color-cream-50);
+  --color-cream-100: var(--color-cream-100);
+  --color-cream-200: var(--color-cream-200);
+  --color-cream-300: var(--color-cream-300);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-muted: var(--color-muted);
+  --color-border: var(--color-border);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-danger: var(--color-danger);
+  --color-info: var(--color-info);
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-cream-50);
+  color: var(--color-ink);
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-coral-800);
+  outline-offset: 3px;
+}
+
+@layer components {
+  .marketing-container {
+    @apply mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8;
+  }
+
+  .marketing-section {
+    @apply py-20 sm:py-28;
+  }
+
+  .marketing-eyebrow {
+    @apply inline-flex rounded-full border border-coral-200 bg-coral-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-coral-800;
+  }
+
+  .marketing-button-primary,
+  .marketing-button-secondary,
+  .marketing-button-light,
+  .marketing-button-on-coral {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-black transition;
+  }
+
+  .marketing-button-primary {
+    @apply bg-coral-700 text-white shadow-[0_8px_24px_rgba(169,67,53,.22)] hover:-translate-y-0.5 hover:bg-coral-800;
+  }
+
+  .marketing-button-secondary {
+    @apply border border-border bg-white text-ink hover:-translate-y-0.5 hover:border-coral-300 hover:bg-coral-50;
+  }
+
+  .marketing-button-light {
+    @apply bg-white text-coral-800 shadow-lg hover:-translate-y-0.5 hover:bg-cream-50;
+  }
+
+  .marketing-button-on-coral {
+    @apply border border-white/45 bg-transparent text-white hover:-translate-y-0.5 hover:bg-white/10;
+  }
+
+  .marketing-product-shell {
+    @apply overflow-hidden rounded-[1.75rem] border bg-white shadow-[0_24px_80px_rgba(112,47,40,.12)];
+  }
+}
+
+.marketing-grid-bg {
+  background-color: var(--color-cream-50);
+  background-image:
+    linear-gradient(rgba(198, 83, 66, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(198, 83, 66, 0.055) 1px, transparent 1px),
+    radial-gradient(
+      circle at 85% 20%,
+      rgba(255, 196, 184, 0.5),
+      transparent 30%
+    );
+  background-size:
+    42px 42px,
+    42px 42px,
+    100% 100%;
+}
+
+.marketing-hero-title {
+  font-size: clamp(2.5rem, 5.2vw, 4.75rem);
+  font-weight: 900;
+  line-height: 1.01;
+  letter-spacing: -0.055em;
+}
+
+.marketing-product-tabs {
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.marketing-product-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.marketing-product-tab {
+  scroll-snap-align: start;
+}
+
+@keyframes marketing-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes marketing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes marketing-preview {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.marketing-reveal {
+  animation: marketing-rise 400ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.marketing-float {
+  animation: none;
+}
+
+.marketing-preview-enter {
+  animation: marketing-preview 240ms ease-out both;
+}
+
+@media (min-width: 40rem) {
+  .marketing-float {
+    animation: marketing-float 6s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -1,0 +1,8 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/forms/master-data";
+import { MyTaskList } from "./my-task-list";
+import { listMyTasks } from "@/modules/execution/service";
+import { hasPermission } from "@/modules/memberships/permissions";
+import { requireTenantContext } from "@/server/auth/tenant";
+export async function MyTasksPage({scope,title,description}:{scope:"all"|"today"|"upcoming"|"completed";title:string;description:string}){const tenant=await requireTenantContext();if(!hasPermission(tenant.role,"work_order:execute"))redirect("/app/dashboard");const rows=await listMyTasks(tenant.organizationId,tenant.membershipId,scope);return <main className="mx-auto w-full max-w-3xl"><PageHeader eyebrow="Field worker" title={title} description={description}/><nav className="mt-5 flex gap-2 overflow-x-auto pb-2" aria-label="Filter tugas"><Link href="/app/my-tasks" className="min-h-11 shrink-0 rounded-xl border bg-white px-4 py-3 text-sm font-bold">Semua</Link><Link href="/app/my-tasks/today" className="min-h-11 shrink-0 rounded-xl border bg-white px-4 py-3 text-sm font-bold">Hari ini</Link><Link href="/app/my-tasks/upcoming" className="min-h-11 shrink-0 rounded-xl border bg-white px-4 py-3 text-sm font-bold">Upcoming</Link><Link href="/app/my-tasks/completed" className="min-h-11 shrink-0 rounded-xl border bg-white px-4 py-3 text-sm font-bold">Completed</Link></nav><MyTaskList rows={rows}/></main>}

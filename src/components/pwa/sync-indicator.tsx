@@ -1,0 +1,7 @@
+"use client";
+/* eslint-disable react-hooks/set-state-in-effect -- effect reflects external network and IndexedDB state. */
+import { CloudOff, RefreshCw, Wifi } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { countUnsynced } from "@/lib/offline-db";
+
+export function SyncIndicator(){const[online,setOnline]=useState(true);const[pending,setPending]=useState(0);const refresh=useCallback(async()=>{setOnline(navigator.onLine);setPending(await countUnsynced().catch(()=>0));},[]);useEffect(()=>{void refresh();window.addEventListener("online",refresh);window.addEventListener("offline",refresh);window.addEventListener("fieldproof:offline-state-changed",refresh);const interval=window.setInterval(()=>void refresh(),5000);return()=>{window.removeEventListener("online",refresh);window.removeEventListener("offline",refresh);window.removeEventListener("fieldproof:offline-state-changed",refresh);window.clearInterval(interval);};},[refresh]);return <button type="button" onClick={()=>window.dispatchEvent(new CustomEvent("fieldproof:sync-requested"))} className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-extrabold ${online?"bg-green-50 text-green-800":"bg-amber-50 text-amber-900"}`} title="Retry synchronization">{online?<Wifi className="size-4"/>:<CloudOff className="size-4"/>}{online?"Online":"Offline"}{pending?<><span>· {pending} pending</span><RefreshCw className="size-4"/></>:null}</button>}
