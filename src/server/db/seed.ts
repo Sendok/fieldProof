@@ -34,7 +34,7 @@ async function seed(): Promise<void> {
   const [owner] = await db.select({ id: users.id }).from(users).where(eq(users.email, "owner@fieldproof.local")).limit(1);
   await db.insert(clients).values({ organizationId: organization.id, createdById: owner.id, code: "HCB", name: "Hotel Coral Bay", contactPerson: "Nadia Coral Bay", email: "client@fieldproof.local" }).onConflictDoNothing();
   const [client] = await db.select({ id: clients.id }).from(clients).where(eq(clients.organizationId, organization.id)).limit(1);
-  await db.insert(sites).values({ organizationId: organization.id, clientId: client.id, createdById: owner.id, code: "HCB-MAIN", name: "Hotel Coral Bay — Main Building", address: "Jl. Pantai Coral No. 1, Jakarta" }).onConflictDoNothing();
+  await db.insert(sites).values({ organizationId: organization.id, clientId: client.id, createdById: owner.id, code: "HCB-MAIN", name: "Hotel Coral Bay — Main Building", address: "Jl. Pantai Coral No. 1, Jakarta", latitude: -6.1754, longitude: 106.8272 }).onConflictDoUpdate({ target: [sites.organizationId, sites.code], set: { latitude: -6.1754, longitude: 106.8272 } });
   await db.insert(teams).values({ organizationId: organization.id, name: "Tim Cleaning Pagi", area: "Jakarta" }).onConflictDoNothing();
   const [team] = await db.select({ id: teams.id }).from(teams).where(eq(teams.organizationId, organization.id)).limit(1);
   const activeMemberships = await db.select({ id: memberships.id }).from(memberships).where(eq(memberships.organizationId, organization.id));

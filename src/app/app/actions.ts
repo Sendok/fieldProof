@@ -57,3 +57,13 @@ export async function logoutAllAction(): Promise<void> {
   (await cookies()).delete(SESSION_COOKIE_NAME);
   redirect("/login");
 }
+
+export async function logoutAction(): Promise<void> {
+  const authSession = await auth();
+  const sessionToken = (await cookies()).get(SESSION_COOKIE_NAME)?.value;
+  if (authSession?.user.id && sessionToken) {
+    await getDatabase().delete(sessions).where(and(eq(sessions.userId, authSession.user.id), eq(sessions.sessionToken, sessionToken)));
+  }
+  (await cookies()).delete(SESSION_COOKIE_NAME);
+  redirect("/login");
+}

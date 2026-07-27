@@ -19,13 +19,14 @@ function workOrderNumber(): string {
   return `WO-${date}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
-async function validateReferences(tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0], organizationId: string, input: WorkOrderInput): Promise<void> {
+async function validateReferences(tx: Parameters<Parameters<ReturnType<typeof getDatabase>["transaction"]>[0]>[0], organizationId: string, input: WorkOrderInput): Promise<{ latitude: number; longitude: number }> {
   const [client, site, version] = await Promise.all([
     tx.select({ id: clients.id }).from(clients).where(and(eq(clients.organizationId, organizationId), eq(clients.id, input.clientId), isNull(clients.archivedAt))).limit(1),
-    tx.select({ id: sites.id, clientId: sites.clientId }).from(sites).where(and(eq(sites.organizationId, organizationId), eq(sites.id, input.siteId), isNull(sites.archivedAt))).limit(1),
+    tx.select({ id: sites.id, clientId: sites.clientId, latitude: sites.latitude, longitude: sites.longitude }).from(sites).where(and(eq(sites.organizationId, organizationId), eq(sites.id, input.siteId), isNull(sites.archivedAt))).limit(1),
     tx.select({ id: checklistTemplateVersions.id }).from(checklistTemplateVersions).where(and(eq(checklistTemplateVersions.organizationId, organizationId), eq(checklistTemplateVersions.id, input.templateVersionId))).limit(1),
   ]);
   if (!client[0] || !site[0] || site[0].clientId !== input.clientId || !version[0]) throw new WorkOrderReferenceError("Client, site, atau template version tidak valid untuk organisasi ini.");
+  if (site[0].latitude == null || site[0].longitude == null) throw new WorkOrderReferenceError("Site wajib memiliki latitude dan longitude sebelum work order dapat ditugaskan.");
   if (input.teamId && !(await tx.select({ id: teams.id }).from(teams).where(and(eq(teams.organizationId, organizationId), eq(teams.id, input.teamId), isNull(teams.archivedAt))).limit(1))[0]) throw new WorkOrderReferenceError("Team tidak valid.");
   const memberIds = [...new Set([...input.assigneeIds, ...(input.supervisorMembershipId ? [input.supervisorMembershipId] : [])])];
   if (memberIds.length) {
@@ -34,6 +35,7 @@ async function validateReferences(tx: Parameters<Parameters<ReturnType<typeof ge
     const supervisor = input.supervisorMembershipId ? members.find((member) => member.id === input.supervisorMembershipId) : undefined;
     if (supervisor && !["OWNER", "ADMIN", "SUPERVISOR"].includes(supervisor.role)) throw new WorkOrderReferenceError("Supervisor harus memiliki role supervisor atau administrator.");
   }
+  return { latitude: site[0].latitude, longitude: site[0].longitude };
 }
 
 function databaseValues(input: WorkOrderInput) {
@@ -56,8 +58,8 @@ export async function createWorkOrder(organizationId: string, actorId: string, i
   const recurrenceSeriesId = input.recurrenceFrequency ? crypto.randomUUID() : null;
   const status = derivePlanningStatus({ hasSchedule: Boolean(input.scheduleStart), assigneeCount: input.assigneeIds.length });
   const row = await getDatabase().transaction(async (tx) => {
-    await validateReferences(tx, organizationId, input);
-    const [created] = await tx.insert(workOrders).values({ organizationId, createdById: actorId, number: workOrderNumber(), ...databaseValues(input), status, recurrenceSeriesId, recurrenceOccurrenceAt: recurrenceSeriesId ? input.scheduleStart : null }).returning();
+    const target = await validateReferences(tx, organizationId, input);
+    const [created] = await tx.insert(workOrders).values({ organizationId, createdById: actorId, number: workOrderNumber(), ...databaseValues(input), targetLatitude: target.latitude, targetLongitude: target.longitude, startRadiusMeters: 50, status, recurrenceSeriesId, recurrenceOccurrenceAt: recurrenceSeriesId ? input.scheduleStart : null }).returning();
     if (input.assigneeIds.length) await tx.insert(workOrderAssignments).values([...new Set(input.assigneeIds)].map((membershipId) => ({ workOrderId: created.id, membershipId, assignedById: actorId })));
     await tx.insert(workOrderStatusHistory).values({ organizationId, workOrderId: created.id, toStatus: status, actorId, reason: "Work order created" });
     await tx.insert(auditLogs).values({ organizationId, actorId, action: "WORK_ORDER_CREATED", resourceType: "WORK_ORDER", resourceId: created.id, afterSummary: { number: created.number, title: created.title, status } });
@@ -93,7 +95,7 @@ export async function getWorkOrderFormOptions(organizationId: string) {
   const db = getDatabase();
   const [clientRows, siteRows, templateRows, teamRows, memberRows] = await Promise.all([
     db.select({ id: clients.id, name: clients.name }).from(clients).where(and(eq(clients.organizationId, organizationId), isNull(clients.archivedAt))).orderBy(asc(clients.name)),
-    db.select({ id: sites.id, clientId: sites.clientId, name: sites.name }).from(sites).where(and(eq(sites.organizationId, organizationId), isNull(sites.archivedAt))).orderBy(asc(sites.name)),
+    db.select({ id: sites.id, clientId: sites.clientId, name: sites.name, address: sites.address, latitude: sites.latitude, longitude: sites.longitude }).from(sites).where(and(eq(sites.organizationId, organizationId), isNull(sites.archivedAt))).orderBy(asc(sites.name)),
     db.select({ id: checklistTemplateVersions.id, version: checklistTemplateVersions.version, templateName: checklistTemplates.name }).from(checklistTemplateVersions).innerJoin(checklistTemplates, eq(checklistTemplates.id, checklistTemplateVersions.templateId)).where(and(eq(checklistTemplateVersions.organizationId, organizationId), isNull(checklistTemplates.archivedAt))).orderBy(asc(checklistTemplates.name), desc(checklistTemplateVersions.version)),
     db.select({ id: teams.id, name: teams.name }).from(teams).where(and(eq(teams.organizationId, organizationId), isNull(teams.archivedAt))).orderBy(asc(teams.name)),
     db.select({ id: memberships.id, name: users.name, role: memberships.role }).from(memberships).innerJoin(users, eq(users.id, memberships.userId)).where(and(eq(memberships.organizationId, organizationId), eq(memberships.status, "ACTIVE"))).orderBy(asc(users.name)),
@@ -112,10 +114,10 @@ export async function updateWorkOrder(organizationId: string, actorId: string, i
     const [before] = await tx.select().from(workOrders).where(and(workOrderTenantPredicate(organizationId, id), eq(workOrders.rowVersion, expectedRowVersion))).limit(1);
     if (!before) throw new WorkOrderConflictError("Work order berubah di sesi lain.");
     if (!["DRAFT", "SCHEDULED", "ASSIGNED"].includes(before.status)) throw new WorkOrderConflictError("Work order tidak dapat diedit setelah pekerjaan dimulai.");
-    await validateReferences(tx, organizationId, input);
+    const target = await validateReferences(tx, organizationId, input);
     const nextStatus = derivePlanningStatus({ hasSchedule: Boolean(input.scheduleStart), assigneeCount: input.assigneeIds.length });
     if (nextStatus !== before.status) assertWorkOrderTransition(before.status, nextStatus);
-    const [updated] = await tx.update(workOrders).set({ ...databaseValues(input), status: nextStatus, rowVersion: expectedRowVersion+1, updatedAt: new Date(), recurrenceSeriesId: input.recurrenceFrequency ? before.recurrenceSeriesId ?? crypto.randomUUID() : null, recurrenceOccurrenceAt: input.recurrenceFrequency ? input.scheduleStart : null }).where(and(workOrderTenantPredicate(organizationId,id),eq(workOrders.rowVersion,expectedRowVersion))).returning();
+    const [updated] = await tx.update(workOrders).set({ ...databaseValues(input), targetLatitude: target.latitude, targetLongitude: target.longitude, startRadiusMeters: 50, status: nextStatus, rowVersion: expectedRowVersion+1, updatedAt: new Date(), recurrenceSeriesId: input.recurrenceFrequency ? before.recurrenceSeriesId ?? crypto.randomUUID() : null, recurrenceOccurrenceAt: input.recurrenceFrequency ? input.scheduleStart : null }).where(and(workOrderTenantPredicate(organizationId,id),eq(workOrders.rowVersion,expectedRowVersion))).returning();
     if (!updated) throw new WorkOrderConflictError("Work order berubah di sesi lain.");
     const previousAssignments = await tx.select({ membershipId: workOrderAssignments.membershipId }).from(workOrderAssignments).where(eq(workOrderAssignments.workOrderId,id));
     await tx.delete(workOrderAssignments).where(eq(workOrderAssignments.workOrderId,id));
@@ -139,7 +141,7 @@ export async function transitionWorkOrderStatus(organizationId:string,actorId:st
 
 export async function bulkAssignWorkOrders(organizationId:string,actorId:string,workOrderIds:string[],membershipId:string){
   const db=getDatabase();const [member]=await db.select({id:memberships.id}).from(memberships).where(and(eq(memberships.organizationId,organizationId),eq(memberships.id,membershipId),eq(memberships.status,"ACTIVE"))).limit(1);if(!member)throw new WorkOrderReferenceError("Assignee tidak valid.");const assigned:string[]=[];
-  for(const id of [...new Set(workOrderIds)]) await db.transaction(async(tx)=>{const [row]=await tx.select().from(workOrders).where(workOrderTenantPredicate(organizationId,id)).limit(1);if(!row||!["DRAFT","SCHEDULED","ASSIGNED"].includes(row.status))return;const [newAssignment]=await tx.insert(workOrderAssignments).values({workOrderId:id,membershipId,assignedById:actorId}).onConflictDoNothing().returning({membershipId:workOrderAssignments.membershipId});if(!newAssignment)return;if(row.status!=="ASSIGNED"){assertWorkOrderTransition(row.status,"ASSIGNED");await tx.update(workOrders).set({status:"ASSIGNED",rowVersion:row.rowVersion+1,updatedAt:new Date()}).where(workOrderTenantPredicate(organizationId,id));await tx.insert(workOrderStatusHistory).values({organizationId,workOrderId:id,fromStatus:row.status,toStatus:"ASSIGNED",actorId,reason:"Bulk assignment"});}await tx.insert(auditLogs).values({organizationId,actorId,action:"WORK_ORDER_ASSIGNED",resourceType:"WORK_ORDER",resourceId:id,metadata:{membershipId,bulk:true}});assigned.push(id);});
+  for(const id of [...new Set(workOrderIds)]) await db.transaction(async(tx)=>{const [row]=await tx.select().from(workOrders).where(workOrderTenantPredicate(organizationId,id)).limit(1);if(!row||!["DRAFT","SCHEDULED","ASSIGNED"].includes(row.status))return;let targetLatitude=row.targetLatitude;let targetLongitude=row.targetLongitude;if(targetLatitude==null||targetLongitude==null){const [site]=await tx.select({latitude:sites.latitude,longitude:sites.longitude}).from(sites).where(and(eq(sites.organizationId,organizationId),eq(sites.id,row.siteId))).limit(1);if(site?.latitude==null||site.longitude==null)throw new WorkOrderReferenceError("Site wajib memiliki latitude dan longitude sebelum assignment.");targetLatitude=site.latitude;targetLongitude=site.longitude;await tx.update(workOrders).set({targetLatitude,targetLongitude,startRadiusMeters:50,updatedAt:new Date()}).where(workOrderTenantPredicate(organizationId,id));}const [newAssignment]=await tx.insert(workOrderAssignments).values({workOrderId:id,membershipId,assignedById:actorId}).onConflictDoNothing().returning({membershipId:workOrderAssignments.membershipId});if(!newAssignment)return;if(row.status!=="ASSIGNED"){assertWorkOrderTransition(row.status,"ASSIGNED");await tx.update(workOrders).set({status:"ASSIGNED",targetLatitude,targetLongitude,startRadiusMeters:50,rowVersion:row.rowVersion+1,updatedAt:new Date()}).where(workOrderTenantPredicate(organizationId,id));await tx.insert(workOrderStatusHistory).values({organizationId,workOrderId:id,fromStatus:row.status,toStatus:"ASSIGNED",actorId,reason:"Bulk assignment"});}await tx.insert(auditLogs).values({organizationId,actorId,action:"WORK_ORDER_ASSIGNED",resourceType:"WORK_ORDER",resourceId:id,metadata:{membershipId,bulk:true,targetLatitude,targetLongitude,startRadiusMeters:50}});assigned.push(id);});
   for(const id of assigned) await createNotifications({organizationId,membershipIds:[membershipId],type:"WORK_ORDER_ASSIGNED",title:"Work order baru ditugaskan",body:"Buka FieldProof untuk melihat detail tugas.",resourceId:id,href:`/app/work-orders/${id}`});return assigned.length;
 }
 

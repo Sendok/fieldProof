@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateSubmissionChecklist } from "@/modules/execution/validation";
+import { submissionInputSchema, validateSubmissionChecklist } from "@/modules/execution/validation";
 import type { ChecklistSchema } from "@/modules/templates/validation";
 
 const schema: ChecklistSchema = {
@@ -50,6 +50,10 @@ const schema: ChecklistSchema = {
   ],
 };
 describe("execution checklist validation", () => {
+  it("requires a GPS recording on every submitted report", () => {
+    expect(() => submissionInputSchema.parse({ answers: {}, appVersion: "test" })).toThrow();
+    expect(submissionInputSchema.parse({ answers: {}, appVersion: "test", location: { latitude: -6.2, longitude: 106.8, accuracy: 12 } }).location.accuracy).toBe(12);
+  });
   it("rejects missing required fields and evidence", () => {
     const result = validateSubmissionChecklist(
       schema,

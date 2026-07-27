@@ -1,2 +1,2 @@
 import { MyTasksPage } from "@/components/work-orders/my-tasks-page";
-export default function Page(){return <MyTasksPage scope="all" title="My tasks" description="Semua tugas yang ditugaskan kepada Anda."/>}
+export default function Page(){return <MyTasksPage scope="all" title="Tugas aktif" description="Hanya pekerjaan yang ditugaskan kepada Anda dan masih perlu diselesaikan."/>}

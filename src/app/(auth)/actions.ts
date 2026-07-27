@@ -22,7 +22,8 @@ export async function loginAction(formData: FormData): Promise<void> {
   }
   if (!session) redirect("/login?error=credentials");
   (await cookies()).set(SESSION_COOKIE_NAME, session.token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", expires: session.expires });
-  redirect("/app/dashboard");
+  if (!session.role) redirect("/app/onboarding");
+  redirect(session.role === "FIELD_WORKER" ? "/app/my-tasks/today" : "/app/dashboard");
 }
 
 export async function registerAction(formData: FormData): Promise<void> {

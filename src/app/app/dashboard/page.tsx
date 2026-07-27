@@ -12,6 +12,7 @@ import { switchOrganizationAction } from "../actions";
 export default async function DashboardPage() {
   let tenant;
   try { tenant = await requireTenantContext(); } catch (error) { if (error instanceof Error && error.message === "ORGANIZATION_REQUIRED") redirect("/app/onboarding"); throw error; }
+  if (tenant.role === "FIELD_WORKER") redirect("/app/my-tasks/today");
   const db = getDatabase();
   const [organization] = await db.select().from(organizations).where(eq(organizations.id, tenant.organizationId)).limit(1);
   const available = await db.select({ id: organizations.id, name: organizations.name }).from(memberships).innerJoin(organizations, eq(organizations.id, memberships.organizationId)).where(and(eq(memberships.userId, tenant.userId), eq(memberships.status, "ACTIVE")));

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 import type { OrganizationRole } from "@/modules/memberships/permissions";
 import { createNotifications } from "@/modules/notifications/service";
 import { assertWorkOrderTransition } from "@/modules/work-orders/state-machine";
@@ -23,8 +23,10 @@ import {
   submissionInputSchema,
   validateSubmissionChecklist,
 } from "./validation";
+import { distanceMeters } from "./location";
 
 export class ExecutionAccessError extends Error {}
+export class WorkLocationError extends Error {}
 export class DraftConflictError extends Error {
   constructor(
     message: string,
@@ -98,14 +100,13 @@ export async function listMyTasks(
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1_000);
   const condition =
     scope === "today"
-      ? and(
-          gte(workOrders.scheduleStart, start),
-          lt(workOrders.scheduleStart, end),
-          inArray(workOrders.status, [
-            "ASSIGNED",
-            "IN_PROGRESS",
-            "REVISION_REQUIRED",
-          ]),
+      ? or(
+          and(
+            gte(workOrders.scheduleStart, start),
+            lt(workOrders.scheduleStart, end),
+            eq(workOrders.status, "ASSIGNED"),
+          ),
+          inArray(workOrders.status, ["IN_PROGRESS", "REVISION_REQUIRED"]),
         )
       : scope === "upcoming"
         ? and(
@@ -123,10 +124,6 @@ export async function listMyTasks(
               "ASSIGNED",
               "IN_PROGRESS",
               "REVISION_REQUIRED",
-              "SUBMITTED",
-              "UNDER_REVIEW",
-              "APPROVED",
-              "COMPLETED",
             ]);
   return getDatabase()
     .select({
@@ -134,6 +131,8 @@ export async function listMyTasks(
       clientName: clients.name,
       siteName: sites.name,
       siteAddress: sites.address,
+      siteLatitude: sites.latitude,
+      siteLongitude: sites.longitude,
     })
     .from(workOrderAssignments)
     .innerJoin(workOrders, eq(workOrders.id, workOrderAssignments.workOrderId))
@@ -162,6 +161,8 @@ export async function getExecutionDetail(
       clientName: clients.name,
       siteName: sites.name,
       siteAddress: sites.address,
+      siteLatitude: sites.latitude,
+      siteLongitude: sites.longitude,
       siteContact: sites.contactPerson,
       sitePhone: sites.phone,
       templateSnapshot: checklistTemplateVersions.schemaSnapshot,
@@ -187,7 +188,7 @@ export async function getExecutionDetail(
     )
     .limit(1);
   if (!detail) throw new ExecutionAccessError("Tugas tidak ditemukan.");
-  const [draft, evidence] = await Promise.all([
+  const [draft, evidence, reportRevision] = await Promise.all([
     db
       .select()
       .from(workOrderDrafts)
@@ -210,8 +211,14 @@ export async function getExecutionDetail(
         ),
       )
       .orderBy(asc(evidenceFiles.createdAt)),
+    db
+      .select({ location: submissionRevisions.location })
+      .from(submissionRevisions)
+      .where(and(eq(submissionRevisions.organizationId, organizationId), eq(submissionRevisions.workOrderId, workOrderId)))
+      .orderBy(desc(submissionRevisions.revision))
+      .limit(1),
   ]);
-  return { ...detail, draft: draft[0] ?? null, evidence };
+  return { ...detail, draft: draft[0] ?? null, evidence, reportLocation: reportRevision[0]?.location ?? null };
 }
 
 export async function startWorkOrder(
@@ -219,7 +226,7 @@ export async function startWorkOrder(
   membershipId: string,
   actorId: string,
   workOrderId: string,
-  location?: { latitude: number; longitude: number; accuracy?: number },
+  location: { latitude: number; longitude: number; accuracy?: number },
 ) {
   await assertExecutionAccess(organizationId, membershipId, workOrderId);
   return getDatabase().transaction(async (tx) => {
@@ -235,6 +242,22 @@ export async function startWorkOrder(
       .limit(1);
     if (!before) throw new ExecutionAccessError("Tugas tidak ditemukan.");
     if (before.status === "IN_PROGRESS") return before;
+    if (before.targetLatitude == null || before.targetLongitude == null)
+      throw new WorkLocationError(
+        "Koordinat target tugas belum tersedia. Minta supervisor memperbarui site dan assignment.",
+      );
+    if (location.accuracy == null || location.accuracy > 50)
+      throw new WorkLocationError(
+        `Akurasi GPS belum memadai (±${Math.round(location.accuracy ?? 0)} m). Tunggu hingga akurasi 50 meter atau lebih baik.`,
+      );
+    const startDistanceMeters = distanceMeters(location, {
+      latitude: before.targetLatitude,
+      longitude: before.targetLongitude,
+    });
+    if (startDistanceMeters > before.startRadiusMeters)
+      throw new WorkLocationError(
+        `Anda berjarak ${Math.round(startDistanceMeters)} meter dari lokasi tugas. Pekerjaan hanya dapat dimulai dalam radius ${before.startRadiusMeters} meter.`,
+      );
     assertWorkOrderTransition(before.status, "IN_PROGRESS");
     const now = new Date();
     const [updated] = await tx
@@ -274,9 +297,19 @@ export async function startWorkOrder(
       resourceType: "WORK_ORDER",
       resourceId: workOrderId,
       beforeSummary: { status: before.status },
-      afterSummary: { status: "IN_PROGRESS", startedAt: now, location },
+      afterSummary: {
+        status: "IN_PROGRESS",
+        startedAt: now,
+        location,
+        target: {
+          latitude: before.targetLatitude,
+          longitude: before.targetLongitude,
+        },
+        startRadiusMeters: before.startRadiusMeters,
+        startDistanceMeters: Math.round(startDistanceMeters),
+      },
     });
-    return updated;
+    return { ...updated, startDistanceMeters: Math.round(startDistanceMeters) };
   });
 }
 
@@ -473,7 +506,7 @@ export async function submitWorkOrder(
       evidenceSnapshot: evidence,
       submittedByMembershipId: membershipId,
       appVersion: input.appVersion,
-      location: input.location ?? null,
+      location: input.location,
       startedAt: currentWork.actualStartedAt,
       finishedAt,
     });

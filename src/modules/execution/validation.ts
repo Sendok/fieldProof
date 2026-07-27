@@ -21,7 +21,7 @@ export const draftSyncSchema = z.object({
 export const submissionInputSchema = z.object({
   answers: answersSchema,
   appVersion: z.string().min(1).max(80),
-  location: locationSchema.nullable().optional(),
+  location: locationSchema,
 });
 
 type EvidenceRef = {

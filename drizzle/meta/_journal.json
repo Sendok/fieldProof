@@ -43,6 +43,20 @@
       "when": 1784610025093,
       "tag": "0005_melted_changeling",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784993579318,
+      "tag": "0006_spooky_energizer",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1785123308476,
+      "tag": "0007_little_lord_hawal",
+      "breakpoints": true
     }
   ]
 }

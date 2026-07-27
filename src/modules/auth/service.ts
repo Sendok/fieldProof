@@ -72,7 +72,7 @@ export async function authenticateCredentials(input: { email: string; password: 
   if (!user?.passwordHash || !user.emailVerified || !(await verifyPassword(user.passwordHash, input.password))) return null;
   const token = createOpaqueToken().raw;
   const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const membership = await db.select({ organizationId: memberships.organizationId }).from(memberships).where(and(eq(memberships.userId, user.id), eq(memberships.status, "ACTIVE"))).limit(1);
+  const membership = await db.select({ organizationId: memberships.organizationId, role: memberships.role }).from(memberships).where(and(eq(memberships.userId, user.id), eq(memberships.status, "ACTIVE"))).limit(1);
   await db.insert(sessions).values({ sessionToken: token, userId: user.id, expires, activeOrganizationId: membership[0]?.organizationId, ipAddress: input.ipAddress, userAgent: input.userAgent });
-  return { token, expires };
+  return { token, expires, role: membership[0]?.role ?? null };
 }

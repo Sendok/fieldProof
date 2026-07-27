@@ -11,7 +11,7 @@ describe("master data validation", () => {
   });
 
   it("accepts optional site coordinates but rejects out-of-range GPS", () => {
-    const base = { clientId: crypto.randomUUID(), code: "SITE-01", name: "Main Building", address: "Jalan Utama 1", country: "ID", status: "ACTIVE" };
+    const base = { clientId: crypto.randomUUID(), code: "SITE-01", name: "Main Building", address: "Jalan Utama 1", country: "ID", state: "DKI Jakarta", city: "Kota Adm. Jakarta Selatan", district: "Kebayoran Baru", subdistrict: "Selong", status: "ACTIVE" };
     expect(siteInputSchema.parse({ ...base, latitude: "", longitude: "" }).latitude).toBeUndefined();
     expect(() => siteInputSchema.parse({ ...base, latitude: "100" })).toThrow();
   });

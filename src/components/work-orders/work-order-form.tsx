@@ -1,17 +1,23 @@
+"use client";
+
+import { useState } from "react";
 import { inputClass, Submit, TextAreaField } from "@/components/forms/master-data";
 
-type Options = { clients:Array<{id:string;name:string}>;sites:Array<{id:string;clientId:string;name:string}>;templates:Array<{id:string;version:number;templateName:string}>;teams:Array<{id:string;name:string}>;members:Array<{id:string;name:string;role:string}> };
+type Options = { clients:Array<{id:string;name:string}>;sites:Array<{id:string;clientId:string;name:string;address:string;latitude:number|null;longitude:number|null}>;templates:Array<{id:string;version:number;templateName:string}>;teams:Array<{id:string;name:string}>;members:Array<{id:string;name:string;role:string}> };
 type Existing = { id:string; rowVersion:number; title:string;description:string|null;clientId:string;siteId:string;templateVersionId:string;priority:string;scheduleStart:Date|null;scheduleEnd:Date|null;dueDate:Date|null;teamId:string|null;supervisorMembershipId:string|null;internalNotes:string|null;instructions:string|null;tags:string[];clientVisibility:boolean;clientApprovalRequired:boolean;recurrenceFrequency:string|null;recurrenceInterval:number|null;recurrenceEndAt:Date|null };
 
 const localDateTime=(value:Date|null|undefined)=>value?new Date(value.getTime()-value.getTimezoneOffset()*60_000).toISOString().slice(0,16):"";
 
 export function WorkOrderForm({action,options,existing,assigneeIds=[]}:{action:(formData:FormData)=>void|Promise<void>;options:Options;existing?:Existing;assigneeIds?:string[]}){
+  const [siteId,setSiteId]=useState(existing?.siteId??"");
+  const selectedSite=options.sites.find((site)=>site.id===siteId);
   const supervisors=options.members.filter((member)=>["OWNER","ADMIN","SUPERVISOR"].includes(member.role));
   const assignees=options.members.filter((member)=>["FIELD_WORKER","SUPERVISOR"].includes(member.role));
   return <form action={action} className="grid gap-4 sm:grid-cols-2">{existing?<><input type="hidden" name="id" value={existing.id}/><input type="hidden" name="rowVersion" value={existing.rowVersion}/></>:null}
     <label className="text-sm font-bold sm:col-span-2">Judul pekerjaan<input required name="title" defaultValue={existing?.title??""} className={inputClass}/></label>
     <label className="text-sm font-bold">Client<select required name="clientId" defaultValue={existing?.clientId??""} className={inputClass}><option value="">Pilih client</option>{options.clients.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-    <label className="text-sm font-bold">Site<select required name="siteId" defaultValue={existing?.siteId??""} className={inputClass}><option value="">Pilih site</option>{options.sites.map((item)=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    <label className="text-sm font-bold">Site<select required name="siteId" value={siteId} onChange={(event)=>setSiteId(event.target.value)} className={inputClass}><option value="">Pilih site</option>{options.sites.map((item)=><option key={item.id} value={item.id} disabled={item.latitude==null||item.longitude==null}>{item.name}{item.latitude==null||item.longitude==null?" · koordinat belum lengkap":""}</option>)}</select></label>
+    {selectedSite?<div className={`rounded-xl p-3 text-sm sm:col-span-2 ${selectedSite.latitude!=null&&selectedSite.longitude!=null?"border border-green-200 bg-green-50 text-green-900":"border border-amber-200 bg-amber-50 text-amber-900"}`}><p className="font-extrabold">Lokasi target pekerjaan · radius mulai 50 meter</p><p className="mt-1">{selectedSite.address}</p>{selectedSite.latitude!=null&&selectedSite.longitude!=null?<p className="mt-1 font-mono font-bold">{selectedSite.latitude.toFixed(6)}, {selectedSite.longitude.toFixed(6)}</p>:<p className="mt-1 font-bold">Lengkapi latitude dan longitude site sebelum assignment.</p>}</div>:null}
     <label className="text-sm font-bold">Template version<select required name="templateVersionId" defaultValue={existing?.templateVersionId??""} className={inputClass}><option value="">Pilih versi published</option>{options.templates.map((item)=><option key={item.id} value={item.id}>{item.templateName} · v{item.version}</option>)}</select></label>
     <label className="text-sm font-bold">Priority<select name="priority" defaultValue={existing?.priority??"NORMAL"} className={inputClass}><option>LOW</option><option>NORMAL</option><option>HIGH</option><option>URGENT</option></select></label>
     <label className="text-sm font-bold">Schedule start<input type="datetime-local" name="scheduleStart" defaultValue={localDateTime(existing?.scheduleStart)} className={inputClass}/></label><label className="text-sm font-bold">Schedule end<input type="datetime-local" name="scheduleEnd" defaultValue={localDateTime(existing?.scheduleEnd)} className={inputClass}/></label><label className="text-sm font-bold">Due date<input type="datetime-local" name="dueDate" defaultValue={localDateTime(existing?.dueDate)} className={inputClass}/></label>

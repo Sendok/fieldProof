@@ -199,6 +199,12 @@ html {
   }
 }
 
+@media (max-width: 47.999rem) {
+  .worker-shell .execution-action-bar {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
